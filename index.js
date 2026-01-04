@@ -3,8 +3,6 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
-
 app.use(cors())
 app.use(express.json())
 
@@ -26,7 +24,7 @@ app.get("/", (req, res) => {
 
 async function run() {
     try {
-        await client.connect();
+        //await client.connect();
         console.log("✅ MongoDB connected successfully!");
 
         const reviewDB = client.db('reviewDB')
@@ -55,28 +53,48 @@ async function run() {
         app.get('/reviews/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
+            console.log("query", query)
             const result = await reviewCollection.findOne(query)
             res.send(result)
         })
 
 
 
-        app.get('/reviews', async (req, res) => {
+        app.get("/reviews", async (req, res) => {
             try {
                 const search = req.query.search || "";
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 9;
+                const sortField = req.query.sort || "date";
+                const order = req.query.order === "asc" ? 1 : -1;
+
                 const query = search
-                    ? { foodName: { $regex: search, $options: "i" } } 
-                    : {}; 
+                    ? { foodName: { $regex: search, $options: "i" } }
+                    : {};
 
-                const cursor = reviewCollection.find(query).sort({ date: -1 }); 
-                const reviews = await cursor.toArray();
+                const skip = (page - 1) * limit;
 
-                res.send(reviews);
+                const reviews = await reviewCollection
+                    .find(query)
+                    .sort({ [sortField]: order })
+                    .skip(skip)
+                    .limit(limit)
+                    .toArray();
+
+                const total = await reviewCollection.countDocuments(query);
+
+                res.send({
+                    reviews,
+                    total,
+                    page,
+                    totalPages: Math.ceil(total / limit),
+                });
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ error: "Failed to fetch reviews" });
             }
         });
+
 
 
 
